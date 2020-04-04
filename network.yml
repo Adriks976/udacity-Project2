@@ -222,6 +222,9 @@ Outputs:
   PrivateSubnets:
     Description: A list of the private subnets
     Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]]
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrivateSubnets
 
   PublicSubnet1:
     Description: A reference to the public subnet in the 1st Availability Zone
