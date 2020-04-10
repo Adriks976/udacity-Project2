@@ -1,0 +1,254 @@
+Description:  Creating a bastion in public subnet to be able to ssh to all webservers instances
+
+Parameters:
+  Project:
+    Description: Project name
+    Type: String
+  InstanceType:
+    Type: String
+    Description: The instance type to use for the bastion
+    Default: t3.nano
+
+Resources:
+
+  ## Role and policy for WebApp servers
+  UdacityS3ReadOnlyEC2:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Project}-webapp-role"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+  SSMaccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${Project}-webapp-policy"
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: 
+          - "ssm:Get*"
+          Resource: '*'
+      Roles:
+      - !Ref UdacityS3ReadOnlyEC2
+
+  WebAppInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: UdacityS3ReadOnlyEC2
+
+
+  ## Security groups for LB and WebServers
+  WebAppHostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows http to hosts
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId:
+            Fn::ImportValue:
+              Fn::Sub: bastion-SSHSecurityGroup
+      VpcId:
+        Fn::ImportValue:
+            Fn::Sub: network-VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project} WebApp Hosts HTTP
+  
+  WebAppLBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows http LB traffic
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      VpcId:
+        Fn::ImportValue:
+            Fn::Sub: network-VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project} WebApp LB HTTP
+
+  ## AutoScaling group
+  WebAppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref WebAppLaunchConfig
+      VPCZoneIdentifier:
+        - Fn::ImportValue:
+            Fn::Sub: network-PrivateSubnets
+      MinSize: 1
+      MaxSize: 1
+      DesiredCapacity: 1
+      TargetGroupARNs:
+          - Ref: WebAppTargetGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project} ASG
+          PropagateAtLaunch: True
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: True
+
+  WebAppLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          apt-get update -y
+          apt-get install unzip awscli -y
+          aws ssm get-parameter --name udagramKey --with-decryption --output text --query Parameter.Value --region ${AWS::Region} > /home/ubuntu/.ssh/authorized_keys
+          apt-get install apache2 -y
+          systemctl start apache2.service
+          cd /var/www/html
+          aws s3 cp s3://udacity-demo-1/udacity.zip .
+          unzip -o udacity.zip
+      IamInstanceProfile:
+        Ref: WebAppInstanceProfile
+      SecurityGroups:
+        - Ref: WebAppHostSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdk"
+          Ebs:
+            VolumeSize: "10"
+            DeleteOnTermination: true
+            VolumeType: "gp2"
+      ImageId: ami-03e3a1b55173c30c6
+      InstanceType: !Ref InstanceType
+
+
+  ## LoadBalancer type Application
+  WebAppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      Subnets: !Split [ "," , !ImportValue network-PublicSubnets ]
+      SecurityGroups:
+        - Ref: WebAppLBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-LB
+      Type: application
+
+  WebAppListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebAppTargetGroup
+      LoadBalancerArn: !Ref WebAppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: network-VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project}-Udagram-TargetGroup
+
+  WebAppListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref WebAppTargetGroup
+      Conditions:
+        - Field: path-pattern
+          Values: [/]
+      ListenerArn: !Ref WebAppListener
+      Priority: 1
+
+ 
+  ## Scaling Policies
+  WebAppScaleUp:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebAppAutoScalingGroup
+      Cooldown: 60
+      ScalingAdjustment: 1
+
+  WebAppScaleDown:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebAppAutoScalingGroup
+      Cooldown: 60
+      ScalingAdjustment: -1
+
+  ## Metrics CPU
+  WebAppCPUHighAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: "CpuHigh"
+      AlarmDescription: "CPU usage is greater than 80% for 5 minutes"
+      MetricName: "CPUUtilization"
+      Namespace: "AWS/EC2"
+      Statistic: "Average"
+      Period: "300"
+      EvaluationPeriods: "1"
+      Threshold: "80"
+      ComparisonOperator: "GreaterThanThreshold"
+      AlarmActions:
+        - Ref: WebAppScaleUp
+      Dimensions:
+        - Name: "AutoScalingGroupName"
+          Value:
+            Ref: WebAppAutoScalingGroup
+
+  #CloudWatch alerts
+  WebAppCPULowAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: "WebAppCPUUsageLow"
+      AlarmDescription: "CPU usage is less than 40% for 5 minutes"
+      MetricName: "CPUUtilization"
+      Namespace: "AWS/EC2"
+      Statistic: "Average"
+      Period: "300"
+      EvaluationPeriods: "1"
+      Threshold: "40"
+      ComparisonOperator: "LessThanThreshold"
+      AlarmActions:
+        - Ref: WebAppScaleDown
+      Dimensions:
+        - Name: "AutoScalingGroupName"
+          Value:
+            Ref: WebAppAutoScalingGroup
