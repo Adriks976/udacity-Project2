@@ -76,6 +76,7 @@ Resources:
           - "ec2:AllocateAddress"
           - "ec2:DescribeInstances"
           - "ec2:AssociateAddress"
+          - "ssm:Get*"
           Resource: '*'
       Roles:
       - !Ref EIpAssociationRole
@@ -128,6 +129,7 @@ Resources:
           Arn: !GetAtt BastionInstanceProfile.Arn
         SecurityGroupIds:
           - Ref: BastionHostSecurityGroup
+          - Ref: SSHSecurityGroup
         KeyName:
           Ref: KeyName
         TagSpecifications:
@@ -145,9 +147,11 @@ Resources:
               - |
                 #!/bin/bash
                 apt-get update
-                apt-get install -y awscli
+                apt-get install -y awscli 
                 instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
                 aws ec2 associate-address --instance-id $instance_id --allow-reassociation  --region ${AWS::Region} --allocation-id ${EIPAllocation}
+                aws ssm get-parameter --name udagramKeyPrivate --with-decryption --output text --query Parameter.Value --region ${AWS::Region} > /home/ubuntu/.ssh/id_rsa
+                chmod 400 /home/ubuntu/.ssh/udagramKey
               - EIPAllocation: !GetAtt ElasticIpBastion.AllocationId
 Outputs:
 
