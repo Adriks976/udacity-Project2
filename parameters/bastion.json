@@ -1,0 +1,15 @@
+[
+    {
+      "ParameterKey": "Project",
+      "ParameterValue": "udagram"
+    },
+    {
+        "ParameterKey": "KeyName",
+        "ParameterValue": "udagramKey"
+    },
+    {
+        "ParameterKey": "SourceCidrIp",
+        "ParameterValue": "SourceCidrIp"
+    }
+      
+  ]

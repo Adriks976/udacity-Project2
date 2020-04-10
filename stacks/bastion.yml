@@ -1,0 +1,163 @@
+Description:  Creating a bastion in public subnet to be able to ssh to all webservers instances
+
+Parameters:
+  Project:
+    Description: Project name
+    Type: String
+  SourceCidrIp:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Description: The IP CIDR block from which SSH access is allowed
+  InstanceType:
+    Type: String
+    Description: The instance type to use for the bastion
+    Default: t3.nano
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: The name of the SSH key pair
+
+Resources:
+
+  BastionHostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows SSH connections from my CIDR
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Ref: SourceCidrIp
+      VpcId:
+        Fn::ImportValue:
+            Fn::Sub: network-VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project} Bastion Host SG
+
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows SSH connections from the bastion host
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId:
+            Ref: BastionHostSecurityGroup
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: network-VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub ${Project} Internal SSH SG
+
+  EIpAssociationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Project}-bastion-role"
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+  EIpAssociationPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${Project}-bastion-policy"
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: 
+          - "ec2:DescribeAddresses"
+          - "ec2:AllocateAddress"
+          - "ec2:DescribeInstances"
+          - "ec2:AssociateAddress"
+          Resource: '*'
+      Roles:
+      - !Ref EIpAssociationRole
+      
+
+
+  BastionInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: EIpAssociationRole
+
+
+  ElasticIpBastion:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain:
+        Fn::ImportValue: !Sub network-VpcId
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId:
+          Ref: LaunchTemplate
+        Version:
+          Fn::GetAtt: LaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - Fn::ImportValue:
+            Fn::Sub: network-PublicSubnets
+      MinSize: 0
+      MaxSize: 1
+      DesiredCapacity: 1
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: True
+
+  LaunchTemplate:
+    DependsOn:
+      - BastionHostSecurityGroup
+      - ElasticIpBastion
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        InstanceType:
+          Ref: InstanceType
+        ImageId: ami-03e3a1b55173c30c6
+        IamInstanceProfile:
+          Arn: !GetAtt BastionInstanceProfile.Arn
+        SecurityGroupIds:
+          - Ref: BastionHostSecurityGroup
+        KeyName:
+          Ref: KeyName
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub ${Project} Bastion Host
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: !Sub ${Project} Bastion Host
+        UserData:
+          Fn::Base64:
+            Fn::Sub:
+              - |
+                #!/bin/bash
+                apt-get update
+                apt-get install -y awscli
+                instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+                aws ec2 associate-address --instance-id $instance_id --allow-reassociation  --region ${AWS::Region} --allocation-id ${EIPAllocation}
+              - EIPAllocation: !GetAtt ElasticIpBastion.AllocationId
+Outputs:
+
+  SSHSecurityGroup:
+    Description: Allows SSH connections from the bastion host
+    Value: !Ref SSHSecurityGroup
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-SSHSecurityGroup
+
+  BastionIp:
+    Description: Bastion Public IP
+    Value: !Ref ElasticIpBastion
