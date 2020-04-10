@@ -14,25 +14,6 @@ Parameters:
     Type: String
     Default: 10.0.0.0/16
 
-  PublicSubnet1CIDR:
-    Description: CIDR for first public subnet 
-    Type: String
-    Default: 10.0.10.0/24
-
-  PublicSubnet2CIDR:
-    Description: CIDR for second public subnet 
-    Type: String
-    Default: 10.0.11.0/24
-
-  PrivateSubnet1CIDR:
-    Description: CIDR for first public subnet
-    Type: String
-    Default: 10.0.20.0/24
-
-  PrivateSubnet2CIDR:
-    Description: CIDR for second private subnet
-    Type: String
-    Default: 10.0.21.0/24
 
 Resources:
   VPC:
@@ -63,7 +44,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
-      CidrBlock: !Ref PublicSubnet1CIDR
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt VPC.CidrBlock, 256, 8 ]]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -74,7 +55,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [ 1, !GetAZs  '' ]
-      CidrBlock: !Ref PublicSubnet2CIDR
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt VPC.CidrBlock, 256, 8 ]]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -85,7 +66,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [ 0, !GetAZs  '' ]
-      CidrBlock: !Ref PrivateSubnet1CIDR
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt VPC.CidrBlock, 256, 8 ]]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -96,7 +77,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [ 1, !GetAZs  '' ]
-      CidrBlock: !Ref PrivateSubnet2CIDR
+      CidrBlock: !Select [ 3, !Cidr [ !GetAtt VPC.CidrBlock, 256, 8 ]]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name

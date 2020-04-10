@@ -1,0 +1,11 @@
+[
+    {
+      "ParameterKey": "Project",
+      "ParameterValue": "udagram"
+    },
+    {
+        "ParameterKey": "VpcCIDR",
+        "ParameterValue": "10.0.0.0/16"
+    }
+      
+  ]
