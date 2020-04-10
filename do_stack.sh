@@ -34,6 +34,7 @@ elif [[ "$action" =~ ^(delete)$ ]]; then
         aws ssm delete-parameter --name 'SourceCidrIp'
         aws ec2 delete-key-pair --key-name "udagramKey"
         aws ssm delete-parameter --name 'udagramKey'
+        aws ssm delete-parameter --name 'udagramKeyPrivate'
         rm udagramKey*
         echo "Done"
         exit
