@@ -11,6 +11,7 @@ if [[ "$action" =~ ^(create|update)$ ]]; then
         aws ssm put-parameter --name 'SourceCidrIp' --value ${IP_local}'/32' --type String --overwrite 
         ssh-keygen -t rsa -b 4096 -f udagramKey -C "My Udagram key" -N '' -q
         aws ec2 import-key-pair --key-name "udagramKey" --public-key-material fileb://./udagramKey.pub
+        aws ssm put-parameter --name 'udagramKeyPrivate' --value "$(cat udagramKey)" --type SecureString --overwrite
         aws ssm put-parameter --name 'udagramKey' --value "$(cat udagramKey.pub)" --type SecureString --overwrite
         echo "Done"
         exit
