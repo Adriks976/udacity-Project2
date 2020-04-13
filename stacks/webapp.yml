@@ -252,3 +252,8 @@ Resources:
         - Name: "AutoScalingGroupName"
           Value:
             Ref: WebAppAutoScalingGroup
+
+Outputs:
+  Website:
+    Description: The Public DNS for our Website
+    Value: !Join ["", ["http://", !GetAtt [WebAppLoadBalancer, DNSName]]]
