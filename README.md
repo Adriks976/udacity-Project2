@@ -148,5 +148,8 @@ This is the CF stack for deploying WebApp.
 
 ## Website endpoint
 
+Udagram endpoint:
+
+http://webap-webap-1spo8aqyp1q7-414265490.eu-west-1.elb.amazonaws.com/
 
 Due to cost, this endpoint will be accessible only during the review period. But feel free to deploy it on your own!
