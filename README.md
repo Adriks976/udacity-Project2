@@ -14,13 +14,15 @@ You can find in it 3 CF stacks: network, bastion and webapp and one script do_st
 
 ### Secure
 
-Create:
+#### Actions
+
+##### Create:
 
 ```bash
 ./do_stack.sh create secure
 ```
 
-Delete:
+##### Delete:
 
 ```bash
 ./do_stack.sh delete secure
@@ -36,19 +38,21 @@ Good you have your prerequis done!
 
 ### Network
 
-Create: 
+#### Actions
+
+##### Create: 
 
 ```bash
 ./do_stack.sh create network
 ```
 
-Update: 
+##### Update: 
 
 ```bash
 ./do_stack.sh update network
 ```
 
-Delete:
+##### Delete:
 
 ```bash
 ./do_stack.sh delete network
@@ -65,5 +69,40 @@ This stack is about network so you will deploy the CF stack network:
 - Private Routes
 - Public Routes
 - Default Security Group
+
+### Bastion
+
+#### Actions
+
+##### Create: 
+
+```bash
+./do_stack.sh create bastion
+```
+
+##### Update: 
+
+```bash
+./do_stack.sh update bastion
+```
+
+##### Delete:
+
+```bash
+./do_stack.sh delete bastion
+```
+
+Bastion stack was not a mandatory part of the project, but a nice to have.
+
+With this stack you'll have:
+
+- Security Group (from local IP to port 22 on host)
+- Security Group (from bastion on port 22)
+- EIP for Bastion Host
+- IAM Instance Profile
+    - Ability to reallocate EIP
+    - Get parameters from SSM (retrieve SSH Key)
+- Autoscaling Group on Public Subnets
+- Launch Template with user data to get SSH Key and point EIP on instance due to ASG
 
 
