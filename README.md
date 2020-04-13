@@ -106,3 +106,42 @@ With this stack you'll have:
 - Launch Template with user data to get SSH Key and point EIP on instance due to ASG
 
 
+### WebApp
+
+#### Actions
+
+##### Create: 
+
+```bash
+./do_stack.sh create webapp
+```
+
+##### Update: 
+
+```bash
+./do_stack.sh update webapp
+```
+
+##### Delete:
+
+```bash
+./do_stack.sh delete webapp
+```
+
+This is the CF stack for deploying WebApp.
+
+- Application Load Balancer
+- Security Group for LB (only http in and out)
+- Listener
+- Listener Rule
+- Target Group
+- Autoscaling Group
+- Launch Configuration
+- IAM Role and Instance Profile
+    - S3 read access
+    - SSM get to retrieve SSH Public Key
+- Security Group for WebApp Hosts
+    - SSH from bastion
+    - HTTP to be accessible from LB
+- Scaling policies
+- Cloudwatch alarm for CPU usage
