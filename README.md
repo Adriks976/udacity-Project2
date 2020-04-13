@@ -145,3 +145,8 @@ This is the CF stack for deploying WebApp.
     - HTTP to be accessible from LB
 - Scaling policies
 - Cloudwatch alarm for CPU usage
+
+## Website endpoint
+
+
+Due to cost, this endpoint will be accessible only during the review period. But feel free to deploy it on your own!
